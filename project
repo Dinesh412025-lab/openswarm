@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Last-Mile Optimizer — Dispatch Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0D10;
+    --panel:#11161B;
+    --panel-2:#0D1216;
+    --border:#212930;
+    --text:#C9D1D9;
+    --text-dim:#69737D;
+    --text-dimmer:#454E56;
+    --amber:#E8A33D;
+    --cyan:#4FD1C5;
+    --magenta:#C77DFF;
+    --green:#6FCF97;
+    --red:#E86A5D;
+    --d1:#E8A33D;
+    --d2:#4FD1C5;
+    --d3:#C77DFF;
+    --d4:#6FCF97;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    padding:18px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+
+  /* header */
+  header{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    flex-wrap:wrap;gap:10px;
+    border-bottom:1px solid var(--border);
+    padding-bottom:14px;margin-bottom:16px;
+  }
+  .title-block h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:22px;font-weight:700;letter-spacing:0.3px;
+    margin:0 0 4px 0;color:#EDEFF2;
+  }
+  .title-block .sub{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;color:var(--text-dim);letter-spacing:0.4px;
+  }
+  .status-pill{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;font-weight:600;letter-spacing:1px;
+    padding:6px 12px;border-radius:3px;
+    border:1px solid var(--border);
+    color:var(--text-dim);
+    text-transform:uppercase;
+    display:flex;align-items:center;gap:7px;
+  }
+  .status-pill .dot{width:7px;height:7px;border-radius:50%;background:var(--text-dimmer);}
+  .status-pill.idle .dot{background:var(--text-dimmer);}
+  .status-pill.busy{color:var(--amber);border-color:#3a2f18;}
+  .status-pill.busy .dot{background:var(--amber);box-shadow:0 0 8px var(--amber);animation:pulse 1s infinite;}
+  .status-pill.live{color:var(--green);border-color:#1c3324;}
+  .status-pill.live .dot{background:var(--green);box-shadow:0 0 8px var(--green);}
+  .status-pill.alert{color:var(--red);border-color:#3a1f1c;}
+  .status-pill.alert .dot{background:var(--red);box-shadow:0 0 8px var(--red);animation:pulse 0.7s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.35;}}
+
+  /* layout */
+  .grid{
+    display:grid;
+    grid-template-columns:270px 1fr;
+    grid-template-rows:auto auto;
+    gap:14px;
+  }
+  .console-panel{grid-column:1;grid-row:1 / span 2;}
+  .map-panel{grid-column:2;grid-row:1;}
+  .ledger-panel{grid-column:2;grid-row:2;}
+
+  @media (max-width:860px){
+    .grid{grid-template-columns:1fr;}
+    .console-panel{grid-column:1;grid-row:2;}
+    .map-panel{grid-column:1;grid-row:1;}
+    .ledger-panel{grid-column:1;grid-row:3;}
+  }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:6px;
+    overflow:hidden;
+    display:flex;flex-direction:column;
+  }
+  .panel-head{
+    padding:10px 14px;
+    border-bottom:1px solid var(--border);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;letter-spacing:1.4px;
+    color:var(--text-dim);text-transform:uppercase;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+
+  /* console */
+  .console-panel{min-height:420px;}
+  #log{
+    flex:1;overflow-y:auto;padding:12px 14px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;line-height:1.65;
+    display:flex;flex-direction:column;gap:2px;
+    max-height:520px;
+  }
+  #log .line{opacity:0;animation:fadeIn 0.35s forwards;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(2px);}to{opacity:1;transform:translateY(0);}}
+  #log .line .tag{font-weight:600;margin-right:6px;}
+  #log .tag.demand{color:var(--cyan);}
+  #log .tag.router{color:var(--amber);}
+  #log .tag.replan{color:var(--red);}
+  #log .tag.sys{color:var(--text-dim);}
+  #log .msg{color:#B7C0C9;}
+  #log .empty{color:var(--text-dimmer);font-style:normal;}
+
+  /* map */
+  .map-panel svg{display:block;width:100%;height:auto;background:var(--panel-2);}
+  .legend{
+    display:flex;flex-wrap:wrap;gap:12px;
+    padding:9px 14px;border-top:1px solid var(--border);
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-dim);
+  }
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .legend i{width:9px;height:9px;border-radius:2px;display:inline-block;}
+
+  .route{fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;opacity:0.9;}
+  .route.flash{animation:flashline 0.6s ease-in-out 2;}
+  @keyframes flashline{0%,100%{opacity:0.9;}50%{opacity:0.25;}}
+  .driver-label{font-family:'Space Grotesk',sans-serif;font-size:7.5px;font-weight:600;fill:#EDEFF2;}
+  .order-num{font-family:'IBM Plex Mono',monospace;font-size:5.2px;fill:#0A0D10;font-weight:600;}
+  .rush-pulse{animation:rushpulse 1s infinite;}
+  @keyframes rushpulse{0%,100%{transform:scale(1);}50%{transform:scale(1.35);}}
+
+  /* ledger */
+  .ledger-body{padding:12px 14px;}
+  table{width:100%;border-collapse:collapse;font-family:'IBM Plex Mono',monospace;font-size:11.5px;}
+  th{
+    text-align:left;color:var(--text-dim);font-weight:500;
+    font-size:10px;text-transform:uppercase;letter-spacing:0.6px;
+    padding:4px 8px;border-bottom:1px solid var(--border);
+  }
+  td{padding:6px 8px;border-bottom:1px solid #171D22;color:var(--text);}
+  tr.total td{border-top:1px solid var(--border);border-bottom:none;font-weight:600;color:#EDEFF2;padding-top:9px;}
+  .swatch{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:6px;}
+
+  .delta-row{
+    display:flex;gap:10px;flex-wrap:wrap;
+    padding:0 14px 14px 14px;
+  }
+  .delta-card{
+    display:none;
+    flex:1;min-width:120px;
+    background:var(--panel-2);border:1px solid var(--border);border-radius:5px;
+    padding:10px 12px;
+  }
+  .delta-card.show{display:block;}
+  .delta-card .k{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.6px;}
+  .delta-card .v{font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600;color:var(--red);margin-top:2px;}
+  .delta-note{
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--text-dim);
+    padding:0 14px 12px 14px;
+  }
+
+  /* controls */
+  .controls{
+    display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;
+  }
+  button{
+    font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12.5px;
+    letter-spacing:0.3px;
+    padding:10px 16px;border-radius:4px;border:1px solid var(--border);
+    background:var(--panel);color:var(--text);cursor:pointer;
+    transition:all 0.15s ease;
+  }
+  button:hover:not(:disabled){border-color:var(--text-dim);}
+  button:disabled{opacity:0.35;cursor:not-allowed;}
+  button.primary{background:var(--amber);color:#1A1305;border-color:var(--amber);}
+  button.primary:hover:not(:disabled){background:#f0ad4e;}
+  button.rush{background:var(--red);color:#2A0E0B;border-color:var(--red);}
+  button.rush:hover:not(:disabled){background:#f0796b;}
+
+  footer{
+    margin-top:14px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;
+    color:var(--text-dimmer);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="title-block">
+      <h1>Last-Mile Optimizer</h1>
+      <div class="sub">DISPATCHER SWARM · DEMAND → ROUTER → REPLANNER · ZONE 04</div>
+    </div>
+    <div class="status-pill idle" id="statusPill"><span class="dot"></span><span id="statusText">Idle</span></div>
+  </header>
+
+  <div class="grid">
+
+    <div class="panel console-panel">
+      <div class="panel-head"><span>Agent Console</span><span id="logCount">0 events</span></div>
+      <div id="log"><div class="line empty">— awaiting dispatch. press "Run Dispatch" to activate the swarm —</div></div>
+    </div>
+
+    <div class="panel map-panel">
+      <div class="panel-head"><span>Zone Map</span><span>10 orders · 4 drivers</span></div>
+      <svg id="map" viewBox="0 0 440 300" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <div class="panel ledger-panel">
+      <div class="panel-head"><span>Fleet Ledger</span><span id="ledgerState">not yet dispatched</span></div>
+      <div class="ledger-body">
+        <table>
+          <thead><tr><th>Driver</th><th>Stops</th><th>Distance</th><th>Time</th><th>Cost</th></tr></thead>
+          <tbody id="ledgerBody">
+            <tr><td colspan="5" style="color:var(--text-dimmer)">— no routes computed —</td></tr>
+          </tbody>
+          <tfoot id="ledgerFoot"></tfoot>
+        </table>
+      </div>
+      <div class="delta-row" id="deltaRow">
+        <div class="delta-card" id="dDist"><div class="k">Δ Distance</div><div class="v" id="dDistVal">—</div></div>
+        <div class="delta-card" id="dTime"><div class="k">Δ Time</div><div class="v" id="dTimeVal">—</div></div>
+        <div class="delta-card" id="dCost"><div class="k">Δ Cost</div><div class="v" id="dCostVal">—</div></div>
+      </div>
+      <div class="delta-note" id="deltaNote"></div>
+    </div>
+
+  </div>
+
+  <div class="controls">
+    <button class="primary" id="runBtn">Run Dispatch</button>
+    <button class="rush" id="rushBtn" disabled>Add Rush Order</button>
+    <button id="resetBtn">Reset Scenario</button>
+  </div>
+
+  <footer>1 grid unit ≈ 0.8 km · avg speed 32 km/h · $1.35/km · $24/driver-hr · stop dwell 5 min</footer>
+
+</div>
+
+<script>
+// ---------- sample data ----------
+const DRIVERS = [
+  {id:'d1', name:'RIO',   x:4,  y:20, color:'var(--d1)', hex:'#E8A33D'},
+  {id:'d2', name:'NOVA',  x:20, y:3,  color:'var(--d2)', hex:'#4FD1C5'},
+  {id:'d3', name:'BOLT',  x:36, y:18, color:'var(--d3)', hex:'#C77DFF'},
+  {id:'d4', name:'SABLE', x:18, y:25, color:'var(--d4)', hex:'#6FCF97'},
+];
+const ORDERS_SEED = [
+  {id:1, x:8,  y:6},
+  {id:2, x:13, y:11},
+  {id:3, x:5,  y:15},
+  {id:4, x:17, y:21},
+  {id:5, x:25, y:7},
+  {id:6, x:29, y:15},
+  {id:7, x:31, y:23},
+  {id:8, x:15, y:4},
+  {id:9, x:37, y:9},
+  {id:10,x:11, y:24},
+];
+const RUSH_ORDER = {id:'RX', x:22, y:14};
+
+const UNIT_KM = 0.8, SPEED_KMH = 32, COST_PER_KM = 1.35, WAGE_PER_HR = 24, STOP_HR = 5/60;
+
+// ---------- state ----------
+let batches = [];     // [{driver, orders:[], route:{path,distanceUnits}}]
+let totals = null;    // {distanceKm,timeHr,cost}
+let dispatched = false;
+let rushUsed = false;
+
+// ---------- helpers ----------
+const $ = s => document.querySelector(s);
+const dist = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
+const sx = x => 20 + x*10;
+const sy = y => 20 + y*10;
+const fmtKm = u => (u*UNIT_KM).toFixed(1)+' km';
+const fmtMin = hr => Math.round(hr*60)+' min';
+const fmtUSD = c => '$'+c.toFixed(2);
+
+function buildRoute(driver, orders){
+  let current = {x:driver.x, y:driver.y};
+  let unvisited = [...orders];
+  let path = [current];
+  let d = 0;
+  while(unvisited.length){
+    let bi=0, bd=Infinity;
+    unvisited.forEach((o,i)=>{ const dd=dist(current,o); if(dd<bd){bd=dd; bi=i;} });
+    const next = unvisited.splice(bi,1)[0];
+    d += bd;
+    path.push(next);
+    current = next;
+  }
+  return {path, distanceUnits:d};
+}
+
+function routeStats(route, stopCount){
+  const distKm = route.distanceUnits*UNIT_KM;
+  const timeHr = distKm/SPEED_KMH + stopCount*STOP_HR;
+  const cost = distKm*COST_PER_KM + timeHr*WAGE_PER_HR;
+  return {distKm, timeHr, cost};
+}
+
+function demandAgent(orders){
+  const cap = Math.ceil(orders.length/DRIVERS.length)+1;
+  const bs = DRIVERS.map(d => ({driver:d, orders:[]}));
+  const remaining = [...orders].sort((a,b)=>{
+    const da = Math.min(...DRIVERS.map(dr=>dist(dr,a)));
+    const db = Math.min(...DRIVERS.map(dr=>dist(dr,b)));
+    return da-db;
+  });
+  remaining.forEach(o=>{
+    let best=null, bestScore=Infinity;
+    bs.forEach(b=>{
+      const penalty = b.orders.length>=cap ? 1000 : 0;
+      const score = dist(b.driver,o)+penalty;
+      if(score<bestScore){ bestScore=score; best=b; }
+    });
+    best.orders.push(o);
+  });
+  return bs;
+}
+
+function routerAgent(bs){
+  bs.forEach(b=>{
+    b.route = buildRoute(b.driver, b.orders);
+    b.stats = routeStats(b.route, b.orders.length);
+  });
+  return bs;
+}
+
+function fleetTotals(bs){
+  return bs.reduce((acc,b)=>({
+    distKm: acc.distKm+b.stats.distKm,
+    timeHr: acc.timeHr+b.stats.timeHr,
+    cost: acc.cost+b.stats.cost,
+    stops: acc.stops+b.orders.length,
+  }), {distKm:0,timeHr:0,cost:0,stops:0});
+}
+
+// ---------- log ----------
+let logEvents = 0;
+function log(tagClass, tagLabel, msg, delay){
+  return new Promise(resolve=>{
+    setTimeout(()=>{
+      const el = $('#log');
+      if(el.querySelector('.empty')) el.querySelector('.empty').remove();
+      const line = document.createElement('div');
+      line.className='line';
+      line.innerHTML = `<span class="tag ${tagClass}">${tagLabel}</span><span class="msg">${msg}</span>`;
+      el.appendChild(line);
+      el.scrollTop = el.scrollHeight;
+      logEvents++;
+      $('#logCount').textContent = logEvents+' events';
+      resolve();
+    }, delay);
+  });
+}
+function setStatus(cls, text){
+  const p = $('#statusPill');
+  p.className = 'status-pill '+cls;
+  $('#statusText').textContent = text;
+}
+
+// ---------- map rendering ----------
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs){
+  const e = document.createElementNS(NS, tag);
+  for(const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+function drawGrid(svg){
+  const defs = el('defs',{});
+  const pattern = el('pattern',{id:'grid', width:20, height:20, patternUnits:'userSpaceOnUse'});
+  pattern.appendChild(el('path',{d:'M20 0 L0 0 0 20', fill:'none', stroke:'#1A2128', 'stroke-width':1}));
+  defs.appendChild(pattern);
+  svg.appendChild(defs);
+  svg.appendChild(el('rect',{x:0,y:0,width:440,height:300,fill:'url(#grid)'}));
+}
+
+function drawDrivers(svg){
+  DRIVERS.forEach(d=>{
+    const g = el('g',{});
+    const x = sx(d.x), y = sy(d.y);
+    g.appendChild(el('rect',{x:x-7,y:y-5,width:14,height:9,rx:2,fill:d.hex}));
+    g.appendChild(el('rect',{x:x-2,y:y-8,width:8,height:5,rx:1,fill:d.hex,opacity:0.75}));
+    g.appendChild(el('circle',{cx:x-4,cy:y+4,r:2,fill:'#0A0D10',stroke:d.hex,'stroke-width':1.2}));
+    g.appendChild(el('circle',{cx:x+4,cy:y+4,r:2,fill:'#0A0D10',stroke:d.hex,'stroke-width':1.2}));
+    const label = el('text',{x:x, y:y-12, 'text-anchor':'middle', class:'driver-label'});
+    label.textContent = d.name;
+    g.appendChild(label);
+    svg.appendChild(g);
+  });
+}
+
+function drawOrders(svg, bs){
+  const colorFor = {};
+  if(bs) bs.forEach(b=> b.orders.forEach(o=> colorFor[o.id]=b.driver.hex));
+  ORDERS_SEED.forEach(o=>{
+    const x=sx(o.x), y=sy(o.y);
+    const g = el('g',{id:'order-'+o.id});
+    g.appendChild(el('circle',{cx:x,cy:y,r:5.5,fill:'#0D1216',stroke: colorFor[o.id]||'#3a434c','stroke-width':1.8}));
+    const t = el('text',{x:x,y:y+1.8,'text-anchor':'middle',class:'order-num'});
+    t.textContent = o.id;
+    t.setAttribute('fill', colorFor[o.id]?'#0A0D10':'#8A94A0');
+    if(colorFor[o.id]){
+      const c = g.querySelector('circle');
+      c.setAttribute('fill', colorFor[o.id]);
+    }
+    g.appendChild(t);
+    svg.appendChild(g);
+  });
+}
+
+function drawRushMarker(svg){
+  const x=sx(RUSH_ORDER.x), y=sy(RUSH_ORDER.y);
+  const g = el('g',{id:'order-RX'});
+  const diamond = el('polygon',{points:`${x},${y-7} ${x+7},${y} ${x},${y+7} ${x-7},${y}`,
+    fill:'#E86A5D', stroke:'#2A0E0B','stroke-width':1.2, class:'rush-pulse', style:'transform-origin:'+x+'px '+y+'px'});
+  g.appendChild(diamond);
+  const t = el('text',{x:x,y:y+1.8,'text-anchor':'middle',class:'order-num'});
+  t.textContent = '!';
+  t.setAttribute('fill','#2A0E0B');
+  g.appendChild(t);
+  svg.appendChild(g);
+}
+
+function routePathD(route){
+  return route.path.map((p,i)=> (i===0?'M':'L')+sx(p.x).toFixed(1)+' '+sy(p.y).toFixed(1)).join(' ');
+}
+
+function animateRoute(driver, route, flash){
+  const svg = $('#map');
+  let path = svg.querySelector('#route-'+driver.id);
+  if(!path){
+    path = el('path',{id:'route-'+driver.id, class:'route', stroke:driver.hex});
+    svg.insertBefore(path, svg.firstChild.nextSibling); // above grid, below markers
+  }
+  path.setAttribute('d', routePathD(route));
+  const len = path.getTotalLength();
+  path.style.transition = 'none';
+  path.style.strokeDasharray = len;
+  path.style.strokeDashoffset = len;
+  requestAnimationFrame(()=>{
+    path.style.transition = 'stroke-dashoffset 0.8s ease';
+    path.style.strokeDashoffset = 0;
+  });
+  if(flash){
+    path.classList.remove('flash');
+    void path.offsetWidth;
+    path.classList.add('flash');
+  }
+}
+
+function drawLegend(){
+  const l = $('#legend');
+  l.innerHTML = DRIVERS.map(d=>`<span><i style="background:${d.hex}"></i>${d.name}</span>`).join('')
+    + `<span><i style="background:#E86A5D;border-radius:50%"></i>Rush order</span>`;
+}
+
+function initMap(){
+  const svg = $('#map');
+  svg.innerHTML = '';
+  drawGrid(svg);
+  drawOrders(svg, null);
+  drawDrivers(svg);
+  drawLegend();
+}
+
+// ---------- ledger ----------
+function renderLedger(bs, tot){
+  const body = $('#ledgerBody');
+  body.innerHTML = bs.map(b=>`
+    <tr>
+      <td><span class="swatch" style="background:${b.driver.hex}"></span>${b.driver.name}</td>
+      <td>${b.orders.length}</td>
+      <td>${fmtKm(b.route.distanceUnits)}</td>
+      <td>${fmtMin(b.stats.timeHr)}</td>
+      <td>${fmtUSD(b.stats.cost)}</td>
+    </tr>`).join('');
+  $('#ledgerFoot').innerHTML = `
+    <tr class="total">
+      <td>Fleet total</td>
+      <td>${tot.stops}</td>
+      <td>${tot.distKm.toFixed(1)} km</td>
+      <td>${fmtMin(tot.timeHr)}</td>
+      <td>${fmtUSD(tot.cost)}</td>
+    </tr>`;
+  $('#ledgerState').textContent = 'live';
+}
+
+function showDelta(before, after, driverName){
+  const dDist = after.distKm-before.distKm;
+  const dTime = (after.timeHr-before.timeHr)*60;
+  const dCost = after.cost-before.cost;
+  $('#dDistVal').textContent = (dDist>=0?'+':'')+dDist.toFixed(1)+' km';
+  $('#dTimeVal').textContent = (dTime>=0?'+':'')+Math.round(dTime)+' min';
+  $('#dCostVal').textContent = (dCost>=0?'+':'')+'$'+dCost.toFixed(2);
+  ['dDist','dTime','dCost'].forEach(id=> $('#'+id).classList.add('show'));
+  $('#deltaNote').textContent = `Rush order absorbed by ${driverName} — fleet total re-optimized in place, no other route touched.`;
+}
+
+// ---------- flows ----------
+async function runDispatch(){
+  $('#runBtn').disabled = true;
+  setStatus('busy','Dispatching');
+  await log('sys','SYSTEM','10 open orders detected in zone 04. Waking dispatcher swarm.', 150);
+  await log('demand','DEMAND','scanning orders against 4 active driver positions.', 500);
+
+  batches = demandAgent(ORDERS_SEED);
+  const summary = batches.map(b=> `${b.driver.name} ← ${b.orders.length}`).join(', ');
+  await log('demand','DEMAND', `batches closed — ${summary}.`, 650);
+
+  drawOrders($('#map'), batches);
+
+  for(const b of batches){
+    await log('router','ROUTER', `sequencing ${b.driver.name}'s stops — nearest-neighbor pass.`, 500);
+    b.route = buildRoute(b.driver, b.orders);
+    b.stats = routeStats(b.route, b.orders.length);
+    animateRoute(b.driver, b.route, false);
+    await log('router','ROUTER', `${b.driver.name} locked — ${b.orders.length} stops, ${fmtKm(b.route.distanceUnits)}, ${fmtMin(b.stats.timeHr)}, ${fmtUSD(b.stats.cost)}.`, 550);
+  }
+
+  totals = fleetTotals(batches);
+  renderLedger(batches, totals);
+  await log('router','ROUTER', `fleet locked — ${totals.stops} stops, ${totals.distKm.toFixed(1)} km, ${fmtUSD(totals.cost)} total.`, 400);
+
+  dispatched = true;
+  setStatus('live','Fleet Live');
+  $('#rushBtn').disabled = false;
+}
+
+async function addRush(){
+  if(!dispatched || rushUsed) return;
+  $('#rushBtn').disabled = true;
+  setStatus('alert','Rush In-Flight');
+  const before = fleetTotals(batches);
+
+  await log('replan','REPLANNER', `rush order dropped at grid (${RUSH_ORDER.x}, ${RUSH_ORDER.y}). priority: HIGH.`, 150);
+  drawRushMarker($('#map'));
+  await log('replan','REPLANNE
